@@ -20,7 +20,9 @@ npm run build
 Open the page with Swagger UI, expand the **Schemas** section if necessary, then paste the contents of `dist/garmin-swagger-extractor.js` into that page's browser DevTools console. Review your browser's download prompt if shown. The bundle downloads two files:
 
 - `garmin-schema-catalog.json` — versioned catalog (`formatVersion: 1`), models, descriptions, properties, paths, types, examples, enums, metadata, and explicit metadata availability.
-- `garmin-extraction-report.json` — schema/property coverage counts, warnings/errors, per-schema summaries, capture source/time, and limitations.
+- `garmin-extraction-report.json` - schema/property coverage counts, warnings/errors, per-schema summaries, capture source/time, and limitations.
+
+The report status is `CAPTURED — COMPLETENESS UNVERIFIED` unless extraction warnings are present; this is not a live compatibility or completeness verdict.
 
 To check a captured catalog against the supplied manual SplitSummaryDTO reference:
 
@@ -28,17 +30,19 @@ To check a captured catalog against the supplied manual SplitSummaryDTO referenc
 npm run validate -- garmin-schema-catalog.json
 ```
 
-The validator reports observed discrepancies; it never edits or forces extraction results to match. Do not use `npm run extract` expecting a standalone browser: this command intentionally reports that a DOM must be supplied by the open page.
+The validator reports per-check `PASS`, `FAIL`, or `NOT VERIFIABLE`; overall `PASS` only means the supplied catalog values match the manual references, not that the live DOM was fully extracted. It never edits or forces extraction results to match. Do not use `npm run extract` expecting a standalone browser: this command intentionally reports that a DOM must be supplied by the open page.
 
 ## Architecture
 
-`src/extractor.js` is a DOM-only adapter for observable Swagger UI model containers, property rows, descriptions, enum text, and nested model boxes. It expands visible documentation controls in bounded passes, de-duplicates model names, preserves dot-delimited property paths, and records missing metadata as `not-exposed`. `src/serialize.js` emits independent catalog/report structures. `src/browser-entry.js` handles JSON downloads. A bundled IIFE is produced with esbuild; the extractor contains no `fetch`, XHR, WebSocket, or Garmin endpoint calls.
+`src/extractor.js` is a DOM-only adapter for observable Swagger UI model containers, property rows, descriptions, enum text, and nested model boxes. It expands documentation controls in bounded passes, de-duplicates model names, preserves dot-delimited property paths, and records missing metadata as `not-exposed`. `src/serialize.js` emits independent catalog/report structures. `src/browser-entry.js` handles JSON downloads. A bundled IIFE is produced with esbuild; the extractor contains no `fetch`, XHR, WebSocket, or Garmin endpoint calls. Use `npm test`, `npm run lint`, and `npm run build` for checks.
 
 The UI DOM is not a stable API. Selectors are intentionally centralized in the extractor, and missing/duplicate content and bounded expansion produce warnings. The schema catalog records the captured page title and time for provenance.
 
 ## Validation and project status
 
 See [STATUS.md](STATUS.md) for milestone evidence and known blockers. Automated tests use synthetic DOM fixtures, including nested objects, enum values, descriptions, primitive metadata, multiple schemas, empty DOM, and expansion behavior. These verify implementation behavior, not the current live Swagger UI. The manually supplied 225-row SplitSummaryDTO observation is maintained as an acceptance check, not fabricated as a successful capture.
+
+The current adapter targets the manually observed DOM shape: `tr.property-row` with a plain-text first `td`, documentation fields in the second `td`, `.prop-type`, `.renderedMarkdown`, `.property.primitive`, `.prop-enum`, `button.model-box-control`, `table.model`, and `.inner-object`. Expanded objects’ `tr.description` rows are retained separately as `objectDescription`. Enum values found while their enclosing model control still reports collapsed are preserved but marked `partially-exposed`; do not treat those values as complete until inspected in the live UI.
 
 ## Limitations
 

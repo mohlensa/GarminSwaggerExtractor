@@ -1,6 +1,6 @@
 {
   "name": "garmin-swagger-extractor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": false,
   "type": "module",
   "description": "Extract schema documentation from the rendered Garmin Connect Personal API Swagger UI.",
@@ -10,12 +10,14 @@
   },
   "scripts": {
     "test": "node --test test/*.test.js",
+    "lint": "eslint src test",
     "extract": "node src/cli.js",
     "validate": "node src/validate.js",
     "build": "esbuild src/browser-entry.js --bundle --format=iife --platform=browser --target=es2020 --outfile=dist/garmin-swagger-extractor.js"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
+    "eslint": "^10.15.0",
     "jsdom": "^31.0.1"
   }
 }

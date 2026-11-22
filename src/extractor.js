@@ -1,115 +1,168 @@
-/**
- * Read schema documentation from the rendered Swagger UI DOM only. This module
- * intentionally makes no network requests and never examines page data outside
- * the Swagger model/schema panels.
- */
+/** DOM-only reader for Swagger UI's rendered schema/model documentation. */
 const clean = (value) => value?.replace(/\s+/g, " ").trim() ?? "";
 const text = (element) => clean(element?.textContent ?? "");
-const visible = (element) => Boolean(element && element.getClientRects().length);
 
-function descriptionIn(container) {
-  return text(container?.querySelector(".markdown, .renderedMarkdown, .prop-format + .markdown")) || null;
+function descriptionIn(element) {
+  return text(element?.querySelector(":scope > .renderedMarkdown, :scope > td .renderedMarkdown, .renderedMarkdown, .markdown")) || null;
 }
 
-function propertyName(row) {
-  const name = row.querySelector(".property-row .prop-name, .prop-name");
-  return text(name).replace(/\s*\(\s*\*\s*\)\s*$/, "") || null;
+function rowName(row) {
+  const firstCell = row.querySelector(":scope > td:first-child");
+  const nameNode = firstCell?.querySelector(".prop-name, .property-name, code") ?? firstCell;
+  return text(nameNode).replace(/\s*\(\s*\*\s*\)\s*$/, "") || null;
 }
 
-function propertyType(row) {
-  const type = row.querySelector(".prop-type");
-  const value = text(type);
-  if (value) return value;
-  const ref = row.querySelector(".prop-format a, .prop-type a");
-  return text(ref) || null;
+function detailCell(row) {
+  return row.querySelector(":scope > td:nth-child(2)") ?? row;
 }
 
-function propertyDetails(row, parentPath) {
-  const name = propertyName(row);
-  const path = name ? `${parentPath}.${name}` : parentPath;
-  const typeNode = row.querySelector(".prop-type");
-  const enumValues = [...row.querySelectorAll(".prop-enum .enum-item, .prop-enum li, .enum")]
-    .map(text).filter(Boolean);
+function parseMetadata(primitive) {
   const metadata = {};
-  for (const node of row.querySelectorAll(".prop-format, .prop-constraint, .prop-example, .prop-default")) {
+  for (const node of primitive?.querySelectorAll(".prop-format, .prop-constraint, .prop-example, .prop-default, [class*='prop-']") ?? []) {
+    if (node.matches(".prop-type, .prop-enum, .prop-name")) continue;
     const raw = text(node);
-    const match = raw.match(/^([\w -]+):\s*(.+)$/);
-    const label = clean(node.querySelector("strong, b")?.textContent ?? match?.[1] ?? "").replace(/:$/, "").toLowerCase();
-    const value = match?.[2] ?? raw;
-    if (label && value) metadata[label] = value;
+    const match = raw.match(/^([\w .-]+?):\s*(.+)$/);
+    if (match) metadata[clean(match[1]).toLowerCase()] = clean(match[2]);
   }
-  const exampleNode = row.querySelector(".prop-example, .example");
-  const children = [...row.querySelectorAll(".property-row")]
-    .filter((candidate) => candidate.parentElement?.closest(".property-row") === row);
-  const kind = children.length ? "object" : enumValues.length ? "enum" : "property";
+  return metadata;
+}
+
+function exampleValue(primitive, metadata) {
+  const explicit = primitive?.querySelector(".prop-example, .example");
+  if (explicit) return text(explicit) || null;
+  const item = Object.entries(metadata).find(([key]) => key === "example");
+  return item?.[1] ?? null;
+}
+
+function enumData(detail) {
+  const enumNode = detail.querySelector(".prop-enum");
+  if (!enumNode) return { values: [], state: "not-exposed" };
+  const values = [...enumNode.querySelectorAll("li, .enum-item, code, [data-value]")]
+    .map((node) => clean(node.getAttribute("data-value") ?? node.textContent)).filter(Boolean);
+  if (!values.length) {
+    const raw = text(enumNode);
+    if (raw && !/expand|enum values?/i.test(raw)) values.push(...raw.split(/[\n,;]/).map(clean).filter(Boolean));
+  }
+  const collapsed = [...(enumNode?.querySelectorAll("button.model-box-control") ?? [])].some((button) =>
+    button.getAttribute("aria-expanded") === "false" || /collapsed/i.test(button.className));
+  return { values: [...new Set(values)], state: collapsed ? (values.length ? "partially-exposed" : "empty-or-collapsed") : values.length ? "present" : "empty-or-collapsed" };
+}
+
+function objectTableFor(row) {
+  const cell = detailCell(row);
+  return cell.querySelector(":scope .inner-object table.model, :scope table.model")
+    ?? row.querySelector(":scope + tr .inner-object table.model, :scope + tr table.model");
+}
+
+function childRows(table) {
+  return [...table.querySelectorAll("tr.property-row")].filter((row) => row.closest("table.model") === table);
+}
+
+function propertyDetails(row, parentPath, warnings, seenRows = new WeakSet()) {
+  if (seenRows.has(row)) {
+    warnings.push(`Repeated DOM property row at ${parentPath}; recursion stopped.`);
+    return null;
+  }
+  seenRows.add(row);
+  const name = rowName(row);
+  const path = name ? `${parentPath}.${name}` : parentPath;
+  if (!name) warnings.push(`Property row under ${parentPath} has no readable first-cell name.`);
+  const detail = detailCell(row);
+  const primitive = detail.querySelector(":scope .property.primitive") ?? detail;
+  const typeNode = detail.querySelector(":scope .prop-type");
+  const type = text(typeNode) || null;
+  const description = descriptionIn(detail);
+  const metadata = parseMetadata(primitive);
+  const example = exampleValue(primitive, metadata);
+  const enumeration = enumData(detail);
+  if (enumeration.state === "empty-or-collapsed" && detail.querySelector(".prop-enum button.model-box-control")) enumeration.state = "partially-exposed";
+  const table = objectTableFor(row);
+  const children = table ? childRows(table).map((child) => propertyDetails(child, path, warnings, seenRows)).filter(Boolean) : [];
+  const objectDescriptionRow = table?.querySelector(":scope > tbody > tr.description, :scope > tr.description");
+  const objectDescription = descriptionIn(objectDescriptionRow) ?? (objectDescriptionRow ? text(objectDescriptionRow) : null);
+  const isObject = Boolean(table || detail.querySelector(":scope .inner-object"));
+  const kind = isObject ? "object" : enumeration.values.length ? "enum" : "property";
   return {
     name,
     path,
     kind,
-    type: propertyType(row),
-    description: descriptionIn(row),
-    ...(exampleNode ? { example: text(exampleNode) || null } : {}),
-    ...(enumValues.length ? { enum: [...new Set(enumValues)] } : {}),
+    type,
+    description,
+    ...(isObject ? { objectDescription } : {}),
+    ...(example !== null ? { example } : {}),
+    ...(enumeration.values.length ? { enum: enumeration.values } : {}),
+    enumState: enumeration.state,
     metadata,
-    children: children.map((child) => propertyDetails(child, path)),
+    children,
     availability: {
-      description: descriptionIn(row) ? "present" : "not-exposed",
-      example: exampleNode ? "present" : "not-exposed",
-      enum: enumValues.length ? "present" : "not-exposed",
-      type: typeNode || propertyType(row) ? "present" : "not-exposed"
+      description: description ? "present" : "not-exposed",
+      example: example !== null ? "present" : "not-exposed",
+      enum: enumeration.state,
+      type: type ? "present" : "not-exposed",
+      metadata: Object.keys(metadata).length ? "present" : "not-exposed"
     }
   };
 }
 
-function directRows(model) {
-  const candidates = [...model.querySelectorAll(".model .property-row, .model-box .property-row, .property-row")];
-  return candidates.filter((row) => !row.parentElement?.closest(".property-row"));
+function modelTitle(model) {
+  return text(model.querySelector(":scope > caption, :scope > thead .model-title, :scope > .model-title, .model-title"))
+    .replace(/\s*\(\s*\d+\s*\)\s*$/, "").trim();
 }
 
-function schemaFromModel(model) {
-  const title = text(model.querySelector(":scope > .model-title, :scope > .model-box > .model-title, .model-title"))
-    .replace(/\s*\(\s*\d+\s*\)\s*$/, "").trim();
-  if (!title) return null;
-  const rows = directRows(model);
+function schemaFromModel(model, warnings) {
+  const name = modelTitle(model);
+  if (!name) {
+    warnings.push("A rendered table.model had no readable schema title.");
+    return null;
+  }
+  const rows = childRows(model).filter((row) => !row.classList.contains("description"));
+  const seenRows = new WeakSet();
+  const duplicateNames = new Set();
+  const properties = rows.map((row) => propertyDetails(row, name, warnings, seenRows)).filter(Boolean);
+  for (const property of properties) {
+    if (duplicateNames.has(property.name)) warnings.push(`Duplicate direct property name ${name}.${property.name}.`);
+    duplicateNames.add(property.name);
+  }
+  const descriptionRow = model.querySelector(":scope > tbody > tr.description, :scope > tr.description");
   return {
-    name: title,
-    description: descriptionIn(model),
-    properties: rows.map((row) => propertyDetails(row, title)),
+    name,
+    description: descriptionIn(descriptionRow) ?? (descriptionRow ? text(descriptionRow) : null),
+    properties,
     directPropertyCount: rows.length,
     source: "rendered-swagger-ui-dom"
   };
 }
 
-/** Expand schema/inline-object panels with bounded retries; no clicks outside documentation controls. */
+/** Expand only model/enum controls under the schemas container, bounded by pass count. */
 async function expandDocumentation(root, { maxPasses = 8, settleMs = 80 } = {}) {
   const warnings = [];
-  const selectors = [".models-control .expand-operation", ".model-box-control", ".model-toggle", ".model .model-toggle"];
-  for (let pass = 0; pass < maxPasses; pass += 1) {
-    const controls = [...new Set(selectors.flatMap((selector) => [...root.querySelectorAll(selector)]))];
-    const collapsed = controls.filter((control) => {
-      if (!visible(control)) return false;
-      const label = `${control.getAttribute("aria-label") ?? ""} ${control.getAttribute("title") ?? ""} ${control.className ?? ""}`.toLowerCase();
-      const expanded = control.getAttribute("aria-expanded");
-      return expanded === "false" || /collapsed|expand/.test(label) || control.querySelector(".collapsed");
-    });
-    if (!collapsed.length) break;
-    for (const control of collapsed) {
-      try { control.click(); } catch { warnings.push("A documentation expansion control could not be activated."); }
+  const limit = Math.max(0, Math.min(20, Number.isInteger(maxPasses) ? maxPasses : 8));
+  const controlsSeen = new WeakSet();
+  for (let pass = 0; pass < limit; pass += 1) {
+    const controls = [...root.querySelectorAll("button.model-box-control, button[aria-expanded='false']")]
+      .filter((button) => button.matches(".model-box-control, .prop-enum button"));
+    const pending = controls.filter((button) => !controlsSeen.has(button)
+      && (button.getAttribute("aria-expanded") === "false" || /collapsed|expand/i.test(`${button.className} ${button.getAttribute("title") ?? ""}`)));
+    if (!pending.length) return warnings;
+    for (const button of pending) {
+      controlsSeen.add(button);
+      try { button.click(); } catch { warnings.push("A Swagger documentation expansion control threw while being clicked."); }
     }
-    await new Promise((resolve) => globalThis.setTimeout(resolve, settleMs));
-    if (pass === maxPasses - 1) warnings.push(`Expansion stopped after ${maxPasses} passes.`);
+    await new Promise((resolve) => globalThis.setTimeout(resolve, Math.max(0, settleMs)));
   }
+  const stillCollapsed = [...root.querySelectorAll("button.model-box-control, button[aria-expanded='false']")]
+    .some((button) => button.getAttribute("aria-expanded") === "false" || /collapsed|expand/i.test(`${button.className} ${button.getAttribute("title") ?? ""}`));
+  if (stillCollapsed) warnings.push(`Some documentation controls remain collapsed after ${limit} expansion passes.`);
   return warnings;
 }
 
 export function extractRenderedSchemas(documentRef = globalThis.document) {
   if (!documentRef?.querySelectorAll) throw new TypeError("A browser Document is required.");
-  const containers = [...documentRef.querySelectorAll(".models, #swagger-ui")];
-  const root = containers.find((candidate) => candidate.querySelector(".model-title")) ?? documentRef;
-  const models = [...root.querySelectorAll(".models .model-container, .model-container")];
-  const schemas = models.map(schemaFromModel).filter(Boolean);
-  const unique = new Map();
   const warnings = [];
+  const root = documentRef.querySelector("#swagger-ui .models, .models") ?? documentRef.querySelector("#swagger-ui") ?? documentRef;
+  const models = [...root.querySelectorAll("table.model")].filter((model) => !model.parentElement?.closest("table.model"));
+  const schemas = models.map((model) => schemaFromModel(model, warnings)).filter(Boolean);
+  const unique = new Map();
   for (const schema of schemas) {
     if (unique.has(schema.name)) warnings.push(`Duplicate rendered schema title: ${schema.name}`);
     else unique.set(schema.name, schema);
@@ -122,7 +175,8 @@ export function extractRenderedSchemas(documentRef = globalThis.document) {
 }
 
 export async function extractSwaggerDocumentation(documentRef = globalThis.document, options = {}) {
-  const root = documentRef?.querySelector?.("#swagger-ui") ?? documentRef;
+  if (!documentRef?.querySelector) throw new TypeError("A browser Document is required.");
+  const root = documentRef.querySelector("#swagger-ui .models, .models") ?? documentRef.querySelector("#swagger-ui") ?? documentRef;
   const expansionWarnings = await expandDocumentation(root, options);
   const result = extractRenderedSchemas(documentRef);
   result.warnings.unshift(...expansionWarnings);

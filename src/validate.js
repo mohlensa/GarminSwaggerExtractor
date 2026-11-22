@@ -22,25 +22,36 @@ function findPath(properties, path) {
 }
 
 export function validateCatalog(catalog) {
-  const split = catalog.schemas.find((schema) => schema.name === "SplitSummaryDTO");
-  if (!split) return { status: "BLOCKED", checked: ["SplitSummaryDTO"], discrepancies: ["SplitSummaryDTO is absent from the supplied catalog."] };
-  const discrepancies = [];
-  if (split.directPropertyCount !== reference.SplitSummaryDTO.directPropertyCount) {
-    discrepancies.push(`SplitSummaryDTO direct properties: expected ${reference.SplitSummaryDTO.directPropertyCount}, observed ${split.directPropertyCount}.`);
-  }
+  const split = catalog?.schemas?.find((schema) => schema.name === "SplitSummaryDTO");
+  if (!split) return { status: "NOT VERIFIABLE", checks: [{ name: "SplitSummaryDTO", status: "NOT VERIFIABLE", reason: "Schema is absent from the supplied catalog." }], discrepancies: [] };
+  const checks = [];
+  checks.push(split.directPropertyCount === reference.SplitSummaryDTO.directPropertyCount
+    ? { name: "direct property count", status: "PASS", expected: 225, observed: split.directPropertyCount }
+    : { name: "direct property count", status: "FAIL", expected: 225, observed: split.directPropertyCount });
   const maxGrade = findPath(split.properties, "maxGradeValue");
-  if (!maxGrade) discrepancies.push("maxGradeValue inline object was not found.");
+  if (!maxGrade) checks.push({ name: "maxGradeValue", status: "NOT VERIFIABLE", reason: "Inline object is absent or not exposed." });
   else {
-    if (maxGrade.description !== reference.maxGradeValue.description) discrepancies.push("maxGradeValue description did not match the manual reference.");
+    checks.push(maxGrade.objectDescription === reference.maxGradeValue.description
+      ? { name: "maxGradeValue description", status: "PASS" }
+      : maxGrade.objectDescription
+        ? { name: "maxGradeValue description", status: "FAIL", observed: maxGrade.objectDescription }
+        : { name: "maxGradeValue description", status: "NOT VERIFIABLE", reason: "Object description is not exposed." });
     for (const [name, expected] of Object.entries(reference.maxGradeValue.properties)) {
       const actual = findPath(maxGrade.properties ?? maxGrade.children, name);
-      if (!actual) { discrepancies.push(`maxGradeValue.${name} was not found.`); continue; }
-      if (actual.type !== expected.type) discrepancies.push(`maxGradeValue.${name} type mismatch.`);
-      if (expected.example !== undefined && actual.example !== expected.example) discrepancies.push(`maxGradeValue.${name} example mismatch.`);
-      if (expected.enum && JSON.stringify(actual.enum) !== JSON.stringify(expected.enum)) discrepancies.push("maxGradeValue.scale enum values/order mismatch.");
+      if (!actual) { checks.push({ name: `maxGradeValue.${name}`, status: "NOT VERIFIABLE", reason: "Property is absent or not exposed." }); continue; }
+      const fields = ["type", ...(expected.example !== undefined ? ["example"] : []), ...(expected.enum ? ["enum"] : []), ...(expected.description ? ["description"] : [])];
+      for (const field of fields) {
+        if (actual[field] === undefined || actual[field] === null) checks.push({ name: `maxGradeValue.${name}.${field}`, status: "NOT VERIFIABLE", reason: "Metadata is not exposed." });
+        else {
+          const matches = JSON.stringify(actual[field]) === JSON.stringify(expected[field]);
+          checks.push({ name: `maxGradeValue.${name}.${field}`, status: matches ? "PASS" : "FAIL", ...(matches ? {} : { expected: expected[field], observed: actual[field] }) });
+        }
+      }
     }
   }
-  return { status: discrepancies.length ? "FAIL" : "PASS", checked: ["SplitSummaryDTO direct property count", "maxGradeValue object and description", "valueKey type/example", "scale type/12 enum values"], discrepancies };
+  const statuses = checks.map(({ status }) => status);
+  const status = statuses.includes("FAIL") ? "FAIL" : statuses.includes("NOT VERIFIABLE") ? "NOT VERIFIABLE" : "PASS";
+  return { status, checks, discrepancies: checks.filter(({ status: state }) => state === "FAIL") };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

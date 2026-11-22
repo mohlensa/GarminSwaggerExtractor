@@ -1,32 +1,27 @@
-# Project status
+# Project status — remediation 1.0.1
 
 Updated: 2026-11-23
 
+## Milestones
+
 | Stage | Status | Evidence / limitations |
 |---|---|---|
-| 1 — Reproduce DOM extraction | PASS WITH LIMITATIONS | Synthetic DOM tests exercise observable model/property DOM selectors. No live Swagger page or browser was available in the development environment, so live DOM reproduction and the 225-row reference capture remain unverified. |
-| 2 — Extraction engine | PASS WITH LIMITATIONS | Extractor handles names, types, descriptions, examples, enums, rendered metadata, inline children, paths, and metadata availability. Validated against synthetic fixtures only; selector compatibility with current live Swagger UI is pending. |
-| 3 — Discovery and recursive traversal | PASS WITH LIMITATIONS | Scans rendered model containers; bounded expansion; nested-property traversal; duplicate model title warnings. Recursion is bounded by DOM nesting (not schema-reference dereferencing); live collapsed model behavior is unverified. |
-| 4 — Completeness and fidelity | PASS WITH LIMITATIONS | Report counts observed coverage, missing metadata, warnings and limitations. Cannot attest full UI/server completeness without live capture. |
-| 5 — Acceptance testing | BLOCKED | Automated synthetic tests pass. Acceptance validator checks the supplied 225-property, maxGradeValue description, valueKey example, and scale enum references. No genuine live catalog was available, so acceptance validation against Garmin's current DOM has not been run. |
-| 6 — Packaging and publication | IN PROGRESS | Browser IIFE build and documentation implemented. GitHub publication and release remain pending. |
+| 1 — DOM mechanism | PASS WITH LIMITATIONS | Adapter and fixture now use the manually observed table-based Swagger DOM. No live page was accessible, so actual browser compatibility is pending. |
+| 2 — Extraction engine | PASS WITH LIMITATIONS | Added table-cell name/type/description/metadata extraction, enum state, inline object description, nested properties and provenance paths. Synthetic fixture tests only. |
+| 3 — Discovery and traversal | PASS WITH LIMITATIONS | Traverses nested `table.model` DOMs with row ownership checks and duplicate diagnostics; bounded expansion is restricted to model controls in the schemas container. No external `$ref` resolution. |
+| 4 — Completeness/fidelity | PASS WITH LIMITATIONS | Report differentiates exposed, missing, and collapsed/partial metadata; capture status no longer claims PASS/completeness. Live completeness unknown. |
+| 5 — Acceptance testing | BLOCKED — LIVE | Validator supports PASS/FAIL/NOT VERIFIABLE against the 225-property and `maxGradeValue` references. Only synthetic cases have run; no actual catalog has been validated. |
+| 6 — Packaging/publication | PASS WITH LIMITATIONS | Remediation is committed and pushed; v1.0.0 remains unchanged. No v1.0.1 release is tagged because live acceptance is pending. |
 
-## Execution evidence
+## Remediation evidence
 
-- Environment inspection: empty Git repository at project start; Node.js v26.13.1 and npm 12.2.0 available; GitHub CLI authenticated as `mohlensa` with `repo` scope.
-- `npm test`: 5/5 tests pass against synthetic DOM fixtures.
-- `npm run build`: browser IIFE build succeeds (`dist/garmin-swagger-extractor.js`).
-- `npm audit` at dependency installation: zero vulnerabilities reported.
-- Acceptance validator is deliberately fail-closed: it reports discrepancies rather than coercing data. No live capture has been passed to it.
-- Scope review: extractor reads `document` DOM and clicks only matched documentation expansion controls; no API/network/auth/account-data integration is implemented.
+- v1.0.0 root causes: `.prop-name` was assumed for names; test rows were `div.property-row`; schema discovery expected `.model-container`; nested DOM was queried as descendants without table boundaries; enum completeness did not account for collapsed model controls; validator collapsed absence into FAIL and trusted a name-only lookup.
+- New fixtures represent `table.model`, `tr.property-row`, plain-text first-cell names, second-cell detail, `.property.primitive`, `.prop-type`, `.renderedMarkdown`, `.prop-enum`, `button.model-box-control`, `.inner-object`, and `tr.description`.
+- Tests cover extraction, serialization, nested inline objects, examples/descriptions, metadata, absent/malformed rows, empty objects, absent/collapsed enum states, bounded expansion and click errors, report coverage, and three-way acceptance status.
+- The 225 reference count is used only by the validator. It is not injected into extraction output.
+- Live compatibility status: **PENDING**. No Garmin DOM, account content, network response, or endpoint was accessed during this remediation.
+- Quality checks: `npm test` 11/11 pass; `npm run lint` pass; `npm run build` pass; `npm audit` zero vulnerabilities; `git diff --check` pass.
 
-## Defects found/resolved
+## Remaining owner action
 
-- Initial metadata label extraction missed plain-text constraints; corrected to parse exposed `label: value` text.
-- Nested property selection needed to distinguish direct child rows from deeper descendants; corrected to retain direct children at each object level.
-- Bundle target initially rejected top-level await in the browser IIFE; entry point now uses a guarded async function.
-- Fixture setup initially depended on a nonexistent jsdom `defaultView` for DOMParser; fixture now creates its own jsdom document.
-
-## Remaining material validation limitation
-
-The live Swagger UI and browser are not accessible from this development session. A maintainer must run the documented bundle against an authorized, already-open Swagger UI, inspect its report, and run `npm run validate -- <catalog>` before claiming live acceptance. If selectors mismatch the actual rendered DOM, update and retest before treating the tool as production-ready.
+Using an authorized browser already displaying the official Personal API Swagger UI, run the generated browser bundle with the Schemas section open. Inspect the report and catalog; verify `SplitSummaryDTO.directPropertyCount == 225`, the five known enum-bearing properties, and the `maxGradeValue` description/children/12 ordered enum values. Then run `npm run validate -- <captured-catalog.json>`. Report unexpected omissions or partial enum state before calling live acceptance PASS.

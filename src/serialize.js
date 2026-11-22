@@ -24,13 +24,14 @@ function walk(properties, visit) {
 }
 
 export function buildReport(result) {
-  const totals = { schemas: result.schemas.length, directProperties: 0, nestedProperties: 0, enums: 0, examples: 0, descriptions: 0, missingDescriptions: 0, missingTypes: 0, errors: result.warnings.length };
+  const totals = { schemas: result.schemas.length, directProperties: 0, nestedProperties: 0, enums: 0, examples: 0, descriptions: 0, missingDescriptions: 0, missingTypes: 0, collapsedOrMissingEnums: 0, errors: result.warnings.length };
   const schemaSummaries = result.schemas.map((schema) => {
     totals.directProperties += schema.directPropertyCount;
     let nested = 0;
     walk(schema.properties, (property) => {
       if (property.path.split(".").length > 2) nested += 1;
-      if (property.enum?.length) totals.enums += 1;
+      if (property.enum?.length && property.enumState === "present") totals.enums += 1;
+      if (["empty-or-collapsed", "partially-exposed"].includes(property.enumState)) totals.collapsedOrMissingEnums += 1;
       if (property.example !== undefined) totals.examples += 1;
       if (property.description) totals.descriptions += 1;
       else totals.missingDescriptions += 1;
@@ -43,7 +44,7 @@ export function buildReport(result) {
     format: "garmin-swagger-extraction-report",
     formatVersion: 1,
     generatedAt: result.source.capturedAt,
-    status: result.warnings.length ? "PASS WITH WARNINGS" : "PASS",
+    status: result.warnings.length ? "PASS WITH WARNINGS" : "CAPTURED — COMPLETENESS UNVERIFIED",
     source: result.source,
     coverage: totals,
     schemas: schemaSummaries,
