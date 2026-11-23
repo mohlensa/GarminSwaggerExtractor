@@ -21,8 +21,8 @@ Updated: 2026-11-23
 - The 225 reference count is used only by the validator. It is not injected into extraction output.
 - Live compatibility status: **PENDING**. No Garmin DOM, account content, network response, or endpoint was accessed during this remediation.
 - Follow-up fixes are based on the owner-provided live catalog JSON, not a new live DOM session: schema name was doubled, `splitSummaries` was nested, enum values were rendered as one bracketed text node, and valueKey example existed only in description text. A subsequent capture returned zero schemas despite the reported visible section; empty/wrong-page detection is now an explicit failure with provenance flags and diagnostics.
-- Latest reported Console evidence showed `pageTitle: Program FAQ`, `swaggerUiFound: false`, while `schemasPanelFound: true`; this exposed unrelated `.models` fallback. Discovery and expansion now share scoped roots, with a document-level `table.model` fallback if the Swagger container is incomplete; provenance reports panel/document counts and fallback source. Wrong-context warnings remain explicit.
-- Quality checks: `npm test` 16/16 pass; `npm run lint` pass; `npm run build` pass (15.7 KB bundle); `npm audit` zero vulnerabilities. Live capture remains unresolved.
+- Latest report contained 377 `table.model` nodes but zero selected schemas. Root cause: a broad `.closest(".inner-object")` filter removed all tables under that wrapper, including top-level schema tables. Selection now excludes only tables nested inside another `table.model`, matching the earlier working discovery boundary. Document fallback and table-count provenance remain.
+- Quality checks: `npm test` 16/16 pass; `npm run lint` pass; `npm run build` pass (15.8 KB bundle); `npm audit` zero vulnerabilities. Live capture remains unresolved.
 - Running the revised validator against the supplied old capture returns FAIL: 224 versus expected 225, and the captured scale enum still contains wrapper text. Description, type, and example checks pass. This is expected because fixes require a fresh browser capture.
 
 ## Remaining owner action

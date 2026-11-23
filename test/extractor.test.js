@@ -87,8 +87,8 @@ test("ignores unrelated .models outside Swagger root and diagnoses wrong frame",
   assert.ok(result.warnings.some((warning) => warning.includes("execution context")));
 });
 
-test("falls back to rendered document-level model tables when Swagger models panel is empty", () => {
-  const { window } = new JSDOM(`<div id="swagger-ui"><div class="models"></div></div><section class="rendered-docs">${fixtureDocument().querySelector(".models").innerHTML}</section>`);
+test("discovers model tables under an unrelated wrapper when the rendered doc has no Swagger root", () => {
+  const { window } = new JSDOM(`<section class="rendered-docs">${fixtureDocument().querySelector(".models").innerHTML}</section>`);
   const result = extractRenderedSchemas(window.document);
   assert.equal(result.schemas.length, 3);
   assert.equal(result.source.schemaTableSource, "document-fallback");

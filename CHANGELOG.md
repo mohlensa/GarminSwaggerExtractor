@@ -9,6 +9,7 @@
 - Detect an absent Swagger root, missing Schemas panel, and zero model tables; empty extraction is an explicit failure, not a clean capture.
 - Include root/panel/model-table presence in provenance and log actionable failure details to Console.
 - Require the Schemas panel to be inside `#swagger-ui`; unrelated `.models` elements no longer produce a false panel-present diagnostic.
+- Fix the zero-schema regression caused by excluding all tables with `.inner-object` ancestors; exclude only nested `table.model` descendants.
 - Add regression coverage for the supplied live catalog structure.
 - Live re-capture is still required; no acceptance result is claimed.
 

@@ -191,7 +191,11 @@ export function extractRenderedSchemas(documentRef = globalThis.document) {
   const allTables = [...documentRef.querySelectorAll("table.model")];
   const panelTables = modelsPanel ? [...modelsPanel.querySelectorAll("table.model")] : [];
   const tableSource = panelTables.length ? "schemas-panel" : allTables.length ? "document-fallback" : "none";
-  const models = (panelTables.length ? panelTables : allTables).filter((model) => !model.closest(".inner-object"));
+  const candidates = panelTables.length ? panelTables : allTables;
+  const models = candidates.filter((model) => {
+    const parent = model.parentElement?.closest("table.model");
+    return !parent || !model.closest(".inner-object");
+  });
   const schemas = models.map((model) => schemaFromModel(model, warnings)).filter(Boolean);
   if (!swagger) warnings.push("Swagger UI root #swagger-ui was not found in this document. Schema detection used document-level table.model fallback if available; verify the Console execution context is the intended API documentation frame.");
   else if (!modelsPanel) warnings.push("Swagger UI root was found, but no .models Schemas panel was found; using document-level table.model fallback if available.");
