@@ -185,9 +185,14 @@ async function expandDocumentation(root, { maxPasses = 8, settleMs = 80 } = {}) 
 export function extractRenderedSchemas(documentRef = globalThis.document) {
   if (!documentRef?.querySelectorAll) throw new TypeError("A browser Document is required.");
   const warnings = [];
-  const root = documentRef.querySelector("#swagger-ui .models, .models") ?? documentRef.querySelector("#swagger-ui") ?? documentRef;
+  const swagger = documentRef.querySelector("#swagger-ui");
+  const modelsPanel = swagger?.querySelector(".models") ?? documentRef.querySelector(".models");
+  const root = modelsPanel ?? swagger ?? documentRef;
   const models = [...root.querySelectorAll("table.model")].filter((model) => !model.closest(".inner-object"));
   const schemas = models.map((model) => schemaFromModel(model, warnings)).filter(Boolean);
+  if (!swagger) warnings.push("Swagger UI root #swagger-ui was not found. Confirm this is the API documentation page, not a Garmin Developer landing/FAQ page.");
+  else if (!modelsPanel) warnings.push("Swagger UI root was found, but the Schemas panel (.models) was not found.");
+  if (!models.length) warnings.push("No top-level table.model schema tables were found in the Swagger Schemas panel. Extraction is empty; verify the API Schemas section is rendered and expanded before retrying.");
   const unique = new Map();
   for (const schema of schemas) {
     if (unique.has(schema.name)) warnings.push(`Duplicate rendered schema title: ${schema.name}`);
@@ -196,7 +201,14 @@ export function extractRenderedSchemas(documentRef = globalThis.document) {
   return {
     schemas: [...unique.values()],
     warnings,
-    source: { method: "rendered-dom", pageTitle: documentRef.title || null, capturedAt: new Date().toISOString() }
+    source: {
+      method: "rendered-dom",
+      pageTitle: documentRef.title || null,
+      swaggerUiFound: Boolean(swagger),
+      schemasPanelFound: Boolean(modelsPanel),
+      modelTableCount: models.length,
+      capturedAt: new Date().toISOString()
+    }
   };
 }
 

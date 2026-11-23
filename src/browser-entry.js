@@ -7,7 +7,7 @@ function downloadJson(filename, value) {
   link.href = URL.createObjectURL(blob);
   link.download = filename;
   link.click();
-  URL.revokeObjectURL(link.href);
+  globalThis.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
 void (async () => {
@@ -15,7 +15,9 @@ void (async () => {
     const result = await extractSwaggerDocumentation(document);
     downloadJson("garmin-schema-catalog.json", buildCatalog(result));
     downloadJson("garmin-extraction-report.json", buildReport(result));
-    console.info("Garmin Swagger documentation extracted", buildReport(result).coverage);
+    const report = buildReport(result);
+    const log = result.schemas.length ? console.info : console.error;
+    log("Garmin Swagger documentation extraction", report.status, report.source, report.coverage, report.errorsAndWarnings);
   } catch (error) {
     console.error("Garmin Swagger documentation extraction failed", error);
   }

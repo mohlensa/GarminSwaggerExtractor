@@ -22,7 +22,7 @@ Open the page with Swagger UI, expand the **Schemas** section if necessary, then
 - `garmin-schema-catalog.json` — versioned catalog (`formatVersion: 1`), models, descriptions, properties, paths, types, examples, enums, metadata, and explicit metadata availability.
 - `garmin-extraction-report.json` - schema/property coverage counts, warnings/errors, per-schema summaries, capture source/time, and limitations.
 
-The report status is `CAPTURED — COMPLETENESS UNVERIFIED` unless extraction warnings are present; this is not a live compatibility or completeness verdict.
+The report status is `CAPTURED — COMPLETENESS UNVERIFIED` (or `CAPTURED WITH WARNINGS — COMPLETENESS UNVERIFIED`) when at least one schema is found. Empty captures now report `FAILED — NO SCHEMAS FOUND`, include root/panel/model-table diagnostics, and are logged to the browser Console as errors. A visible page section alone is not proof that the API Schemas DOM has rendered.
 
 To check a captured catalog against the supplied manual SplitSummaryDTO reference:
 

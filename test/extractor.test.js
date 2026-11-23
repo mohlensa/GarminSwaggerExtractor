@@ -66,6 +66,18 @@ test("handles empty objects, non-table inline objects, null document, and unexpe
   assert.throws(() => extractRenderedSchemas(null), /Document is required/);
 });
 
+test("empty or wrong-page captures are diagnosed rather than reported as successful", () => {
+  const { window } = new JSDOM(`<html><head><title>Program FAQ</title></head><body><div id="swagger-ui"></div></body></html>`);
+  const result = extractRenderedSchemas(window.document);
+  const report = buildReport(result);
+  assert.equal(result.schemas.length, 0);
+  assert.equal(report.status, "FAILED — NO SCHEMAS FOUND");
+  assert.equal(result.source.swaggerUiFound, true);
+  assert.equal(result.source.schemasPanelFound, false);
+  assert.ok(result.warnings.some((warning) => warning.includes("Schemas panel")));
+  assert.ok(result.warnings.some((warning) => warning.includes("No top-level table.model")));
+});
+
 test("enum states distinguish absent, empty/collapsed and malformed values", () => {
   const { window } = new JSDOM(`<div class="models"><table class="model"><caption>Enums</caption><tbody>${property("absent", "string")}${property("collapsed", "string", `<div class="prop-enum"><button class="model-box-control" aria-expanded="false">expand enum</button></div>`)}${property("malformed", "string", `<div class="prop-enum"><button>Enum values</button></div>`)}</tbody></table></div>`);
   const props = extractRenderedSchemas(window.document).schemas[0].properties;
@@ -81,7 +93,7 @@ test("expands collapsed Swagger model and enum controls only within bounded pass
   }
   const result = await extractSwaggerDocumentation(window.document, { maxPasses: 1, settleMs: 0 });
   assert.ok([...window.document.querySelectorAll("button")].every((button) => button.getAttribute("aria-expanded") === "true"));
-  assert.deepEqual(result.warnings, []);
+  assert.ok(!result.warnings.some((warning) => warning.includes("expansion")));
 });
 
 test("bounded passes report controls that remain collapsed and click exceptions", async () => {

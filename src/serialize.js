@@ -40,11 +40,12 @@ export function buildReport(result) {
     totals.nestedProperties += nested;
     return { name: schema.name, descriptionAvailable: Boolean(schema.description), directProperties: schema.directPropertyCount, nestedProperties: nested };
   });
+  const emptyCapture = result.schemas.length === 0;
   return {
     format: "garmin-swagger-extraction-report",
     formatVersion: 1,
     generatedAt: result.source.capturedAt,
-    status: result.warnings.length ? "PASS WITH WARNINGS" : "CAPTURED — COMPLETENESS UNVERIFIED",
+    status: emptyCapture ? "FAILED — NO SCHEMAS FOUND" : result.warnings.length ? "CAPTURED WITH WARNINGS — COMPLETENESS UNVERIFIED" : "CAPTURED — COMPLETENESS UNVERIFIED",
     source: result.source,
     coverage: totals,
     schemas: schemaSummaries,

@@ -6,6 +6,8 @@
 - Validate `splitSummaries` when embedded as an inline object in a containing schema.
 - Recover primitive examples when rendered in description text (without inventing values).
 - Parse bracketed `Enum:[ ... ]` text cleanly, including one-node wrapped renderings.
+- Detect an absent Swagger root, missing Schemas panel, and zero model tables; empty extraction is an explicit failure, not a clean capture.
+- Include root/panel/model-table presence in provenance and log actionable failure details to Console.
 - Add regression coverage for the supplied live catalog structure.
 - Live re-capture is still required; no acceptance result is claimed.
 
