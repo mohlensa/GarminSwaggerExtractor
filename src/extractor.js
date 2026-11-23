@@ -186,16 +186,16 @@ export function extractRenderedSchemas(documentRef = globalThis.document) {
   if (!documentRef?.querySelectorAll) throw new TypeError("A browser Document is required.");
   const warnings = [];
   const swagger = documentRef.querySelector("#swagger-ui");
-  const modelsPanel = swagger?.querySelector(".models") ?? null;
-  const standaloneModels = !swagger ? [...documentRef.querySelectorAll(".models")].find((panel) => panel.querySelector("table.model")) ?? null : null;
-  const root = modelsPanel ?? standaloneModels ?? swagger ?? documentRef;
-  const models = (swagger || standaloneModels)
-    ? [...root.querySelectorAll("table.model")].filter((model) => !model.closest(".inner-object"))
-    : [];
+  const modelPanels = [...(swagger?.querySelectorAll(".models") ?? [])];
+  const modelsPanel = modelPanels.find((panel) => panel.querySelector("table.model")) ?? modelPanels[0] ?? null;
+  const allTables = [...documentRef.querySelectorAll("table.model")];
+  const panelTables = modelsPanel ? [...modelsPanel.querySelectorAll("table.model")] : [];
+  const tableSource = panelTables.length ? "schemas-panel" : allTables.length ? "document-fallback" : "none";
+  const models = (panelTables.length ? panelTables : allTables).filter((model) => !model.closest(".inner-object"));
   const schemas = models.map((model) => schemaFromModel(model, warnings)).filter(Boolean);
-  if (!swagger && !standaloneModels) warnings.push("Swagger UI root #swagger-ui was not found in this document. Confirm the Console execution context is the API Swagger page/frame, not a Garmin Developer landing/FAQ page.");
-  else if (!swagger && standaloneModels) warnings.push("#swagger-ui root was not found; using a standalone .models panel. Verify this is the intended Swagger documentation frame.");
-  else if (!modelsPanel) warnings.push("Swagger UI root was found, but the Schemas panel (.models) was not found.");
+  if (!swagger) warnings.push("Swagger UI root #swagger-ui was not found in this document. Schema detection used document-level table.model fallback if available; verify the Console execution context is the intended API documentation frame.");
+  else if (!modelsPanel) warnings.push("Swagger UI root was found, but no .models Schemas panel was found; using document-level table.model fallback if available.");
+  else if (!panelTables.length && allTables.length) warnings.push("The .models panel contained no table.model nodes; using document-level table.model fallback.");
   if (!models.length) warnings.push("No top-level table.model schema tables were found in the Swagger Schemas panel. Extraction is empty; verify the API Schemas section is rendered and expanded before retrying.");
   const unique = new Map();
   for (const schema of schemas) {
@@ -209,7 +209,10 @@ export function extractRenderedSchemas(documentRef = globalThis.document) {
       method: "rendered-dom",
       pageTitle: documentRef.title || null,
       swaggerUiFound: Boolean(swagger),
-      schemasPanelFound: Boolean(modelsPanel ?? standaloneModels),
+      schemasPanelFound: Boolean(modelsPanel),
+      schemaTableSource: tableSource,
+      documentModelTableCount: allTables.length,
+      panelModelTableCount: panelTables.length,
       modelTableCount: models.length,
       capturedAt: new Date().toISOString()
     }
@@ -218,7 +221,11 @@ export function extractRenderedSchemas(documentRef = globalThis.document) {
 
 export async function extractSwaggerDocumentation(documentRef = globalThis.document, options = {}) {
   if (!documentRef?.querySelector) throw new TypeError("A browser Document is required.");
-  const root = documentRef.querySelector("#swagger-ui .models, .models") ?? documentRef.querySelector("#swagger-ui") ?? documentRef;
+  const swagger = documentRef.querySelector("#swagger-ui");
+  const root = swagger?.querySelector(".models")
+    ?? [...documentRef.querySelectorAll(".models")].find((panel) => panel.querySelector("button.model-box-control, button[aria-expanded='false']"))
+    ?? swagger
+    ?? documentRef;
   const expansionWarnings = await expandDocumentation(root, options);
   const result = extractRenderedSchemas(documentRef);
   result.warnings.unshift(...expansionWarnings);

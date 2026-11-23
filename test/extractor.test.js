@@ -87,6 +87,14 @@ test("ignores unrelated .models outside Swagger root and diagnoses wrong frame",
   assert.ok(result.warnings.some((warning) => warning.includes("execution context")));
 });
 
+test("falls back to rendered document-level model tables when Swagger models panel is empty", () => {
+  const { window } = new JSDOM(`<div id="swagger-ui"><div class="models"></div></div><section class="rendered-docs">${fixtureDocument().querySelector(".models").innerHTML}</section>`);
+  const result = extractRenderedSchemas(window.document);
+  assert.equal(result.schemas.length, 3);
+  assert.equal(result.source.schemaTableSource, "document-fallback");
+  assert.ok(result.warnings.some((warning) => warning.includes("document-level table.model fallback")));
+});
+
 test("enum states distinguish absent, empty/collapsed and malformed values", () => {
   const { window } = new JSDOM(`<div class="models"><table class="model"><caption>Enums</caption><tbody>${property("absent", "string")}${property("collapsed", "string", `<div class="prop-enum"><button class="model-box-control" aria-expanded="false">expand enum</button></div>`)}${property("malformed", "string", `<div class="prop-enum"><button>Enum values</button></div>`)}</tbody></table></div>`);
   const props = extractRenderedSchemas(window.document).schemas[0].properties;

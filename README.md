@@ -22,7 +22,7 @@ Open the page with Swagger UI, expand the **Schemas** section if necessary, then
 - `garmin-schema-catalog.json` — versioned catalog (`formatVersion: 1`), models, descriptions, properties, paths, types, examples, enums, metadata, and explicit metadata availability.
 - `garmin-extraction-report.json` - schema/property coverage counts, warnings/errors, per-schema summaries, capture source/time, and limitations.
 
-The report status is `CAPTURED — COMPLETENESS UNVERIFIED` (or `CAPTURED WITH WARNINGS — COMPLETENESS UNVERIFIED`) when at least one schema is found. Empty captures now report `FAILED — NO SCHEMAS FOUND`, include root/panel/model-table diagnostics, and are logged to the browser Console as errors. A visible page section alone is not proof that the API Schemas DOM has rendered. `schemasPanelFound` normally requires `.models` inside `#swagger-ui`; if the root is absent, fallback is only considered when a standalone `.models` actually contains `table.model`, and the report warns that the frame/context needs verification.
+The report status is `CAPTURED — COMPLETENESS UNVERIFIED` (or `CAPTURED WITH WARNINGS — COMPLETENESS UNVERIFIED`) when at least one schema is found. Empty captures now report `FAILED — NO SCHEMAS FOUND`, include root/panel/model-table diagnostics, and are logged to the browser Console as errors. A visible page section alone is not proof that the API Schemas DOM has rendered. Discovery first checks `.models` under `#swagger-ui`; if it contains no `table.model`, it falls back to document-level model tables and explicitly identifies that fallback in provenance and warnings.
 
 To check a captured catalog against the supplied manual SplitSummaryDTO reference:
 
