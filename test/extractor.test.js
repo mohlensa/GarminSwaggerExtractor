@@ -78,6 +78,15 @@ test("empty or wrong-page captures are diagnosed rather than reported as success
   assert.ok(result.warnings.some((warning) => warning.includes("No top-level table.model")));
 });
 
+test("ignores unrelated .models outside Swagger root and diagnoses wrong frame", () => {
+  const { window } = new JSDOM(`<html><head><title>Program FAQ</title></head><body><div class="models"><div class="model-container"></div></div></body></html>`);
+  const result = extractRenderedSchemas(window.document);
+  assert.equal(result.source.swaggerUiFound, false);
+  assert.equal(result.source.schemasPanelFound, false);
+  assert.equal(result.source.modelTableCount, 0);
+  assert.ok(result.warnings.some((warning) => warning.includes("execution context")));
+});
+
 test("enum states distinguish absent, empty/collapsed and malformed values", () => {
   const { window } = new JSDOM(`<div class="models"><table class="model"><caption>Enums</caption><tbody>${property("absent", "string")}${property("collapsed", "string", `<div class="prop-enum"><button class="model-box-control" aria-expanded="false">expand enum</button></div>`)}${property("malformed", "string", `<div class="prop-enum"><button>Enum values</button></div>`)}</tbody></table></div>`);
   const props = extractRenderedSchemas(window.document).schemas[0].properties;

@@ -186,11 +186,15 @@ export function extractRenderedSchemas(documentRef = globalThis.document) {
   if (!documentRef?.querySelectorAll) throw new TypeError("A browser Document is required.");
   const warnings = [];
   const swagger = documentRef.querySelector("#swagger-ui");
-  const modelsPanel = swagger?.querySelector(".models") ?? documentRef.querySelector(".models");
-  const root = modelsPanel ?? swagger ?? documentRef;
-  const models = [...root.querySelectorAll("table.model")].filter((model) => !model.closest(".inner-object"));
+  const modelsPanel = swagger?.querySelector(".models") ?? null;
+  const standaloneModels = !swagger ? [...documentRef.querySelectorAll(".models")].find((panel) => panel.querySelector("table.model")) ?? null : null;
+  const root = modelsPanel ?? standaloneModels ?? swagger ?? documentRef;
+  const models = (swagger || standaloneModels)
+    ? [...root.querySelectorAll("table.model")].filter((model) => !model.closest(".inner-object"))
+    : [];
   const schemas = models.map((model) => schemaFromModel(model, warnings)).filter(Boolean);
-  if (!swagger) warnings.push("Swagger UI root #swagger-ui was not found. Confirm this is the API documentation page, not a Garmin Developer landing/FAQ page.");
+  if (!swagger && !standaloneModels) warnings.push("Swagger UI root #swagger-ui was not found in this document. Confirm the Console execution context is the API Swagger page/frame, not a Garmin Developer landing/FAQ page.");
+  else if (!swagger && standaloneModels) warnings.push("#swagger-ui root was not found; using a standalone .models panel. Verify this is the intended Swagger documentation frame.");
   else if (!modelsPanel) warnings.push("Swagger UI root was found, but the Schemas panel (.models) was not found.");
   if (!models.length) warnings.push("No top-level table.model schema tables were found in the Swagger Schemas panel. Extraction is empty; verify the API Schemas section is rendered and expanded before retrying.");
   const unique = new Map();
@@ -205,7 +209,7 @@ export function extractRenderedSchemas(documentRef = globalThis.document) {
       method: "rendered-dom",
       pageTitle: documentRef.title || null,
       swaggerUiFound: Boolean(swagger),
-      schemasPanelFound: Boolean(modelsPanel),
+      schemasPanelFound: Boolean(modelsPanel ?? standaloneModels),
       modelTableCount: models.length,
       capturedAt: new Date().toISOString()
     }
