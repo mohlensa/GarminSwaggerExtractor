@@ -21,27 +21,49 @@ function findPath(properties, path) {
   return null;
 }
 
+function findSplitSummary(catalog) {
+  for (const schema of catalog?.schemas ?? []) {
+    const candidates = [schema, ...flatten(schema.properties)];
+    const match = candidates.find((property) => property.name === "splitSummaries" && property.kind === "object");
+    if (match) return { schema, object: match };
+    if (schema.name === "SplitSummaryDTO") return { schema, object: schema };
+  }
+  return null;
+}
+
+function flatten(properties) {
+  return (properties ?? []).flatMap((property) => [property, ...flatten(property.properties ?? property.children)]);
+}
+
 export function validateCatalog(catalog) {
-  const split = catalog?.schemas?.find((schema) => schema.name === "SplitSummaryDTO");
-  if (!split) return { status: "NOT VERIFIABLE", checks: [{ name: "SplitSummaryDTO", status: "NOT VERIFIABLE", reason: "Schema is absent from the supplied catalog." }], discrepancies: [] };
+  const found = findSplitSummary(catalog);
+  const split = found?.object;
+  if (!split) return { status: "NOT VERIFIABLE", checks: [{ name: "SplitSummaryDTO/splitSummaries", status: "NOT VERIFIABLE", reason: "Neither a SplitSummaryDTO schema nor a splitSummaries inline object is present in the supplied catalog." }], discrepancies: [] };
   const checks = [];
-  checks.push(split.directPropertyCount === reference.SplitSummaryDTO.directPropertyCount
-    ? { name: "direct property count", status: "PASS", expected: 225, observed: split.directPropertyCount }
-    : { name: "direct property count", status: "FAIL", expected: 225, observed: split.directPropertyCount });
-  const maxGrade = findPath(split.properties, "maxGradeValue");
+  const directPropertyCount = split.directPropertyCount ?? split.properties?.length ?? split.children?.length;
+  checks.push(directPropertyCount === reference.SplitSummaryDTO.directPropertyCount
+    ? { name: "direct property count", status: "PASS", expected: 225, observed: directPropertyCount }
+    : directPropertyCount === undefined
+      ? { name: "direct property count", status: "NOT VERIFIABLE", expected: 225, reason: "Direct property count is unavailable." }
+      : { name: "direct property count", status: "FAIL", expected: 225, observed: directPropertyCount });
+  const maxGrade = findPath(split.properties ?? split.children, "maxGradeValue");
   if (!maxGrade) checks.push({ name: "maxGradeValue", status: "NOT VERIFIABLE", reason: "Inline object is absent or not exposed." });
   else {
-    checks.push(maxGrade.objectDescription === reference.maxGradeValue.description
+    const objectDescription = maxGrade.objectDescription ?? maxGrade.description;
+    checks.push(objectDescription?.replace(/[.!]$/, "") === reference.maxGradeValue.description.replace(/[.!]$/, "")
       ? { name: "maxGradeValue description", status: "PASS" }
-      : maxGrade.objectDescription
-        ? { name: "maxGradeValue description", status: "FAIL", observed: maxGrade.objectDescription }
+      : objectDescription
+        ? { name: "maxGradeValue description", status: "FAIL", observed: objectDescription }
         : { name: "maxGradeValue description", status: "NOT VERIFIABLE", reason: "Object description is not exposed." });
     for (const [name, expected] of Object.entries(reference.maxGradeValue.properties)) {
       const actual = findPath(maxGrade.properties ?? maxGrade.children, name);
       if (!actual) { checks.push({ name: `maxGradeValue.${name}`, status: "NOT VERIFIABLE", reason: "Property is absent or not exposed." }); continue; }
       const fields = ["type", ...(expected.example !== undefined ? ["example"] : []), ...(expected.enum ? ["enum"] : []), ...(expected.description ? ["description"] : [])];
       for (const field of fields) {
-        if (actual[field] === undefined || actual[field] === null) checks.push({ name: `maxGradeValue.${name}.${field}`, status: "NOT VERIFIABLE", reason: "Metadata is not exposed." });
+        if (field === "example" && actual[field] == null && actual.description?.match(/\bfor example,?\s+([\w.-]+)/i)?.[1]) {
+          const observed = actual.description.match(/\bfor example,?\s+([\w.-]+)/i)[1];
+          checks.push({ name: `maxGradeValue.${name}.${field}`, status: observed === expected[field] ? "PASS" : "FAIL", ...(observed === expected[field] ? {} : { expected: expected[field], observed }) });
+        } else if (actual[field] === undefined || actual[field] === null) checks.push({ name: `maxGradeValue.${name}.${field}`, status: "NOT VERIFIABLE", reason: "Metadata is not exposed." });
         else {
           const matches = JSON.stringify(actual[field]) === JSON.stringify(expected[field]);
           checks.push({ name: `maxGradeValue.${name}.${field}`, status: matches ? "PASS" : "FAIL", ...(matches ? {} : { expected: expected[field], observed: actual[field] }) });

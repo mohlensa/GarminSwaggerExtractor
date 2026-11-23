@@ -1,6 +1,6 @@
 {
   "name": "garmin-swagger-extractor",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": false,
   "type": "module",
   "description": "Extract schema documentation from the rendered Garmin Connect Personal API Swagger UI.",

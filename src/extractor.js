@@ -27,11 +27,22 @@ function parseMetadata(primitive) {
   return metadata;
 }
 
-function exampleValue(primitive, metadata) {
+function exampleValue(primitive, metadata, description) {
   const explicit = primitive?.querySelector(".prop-example, .example");
   if (explicit) return text(explicit) || null;
   const item = Object.entries(metadata).find(([key]) => key === "example");
-  return item?.[1] ?? null;
+  if (item) return item[1];
+  const exampleLabel = [...(primitive?.querySelectorAll(".prop-format, .property-format, .primitive-details li, dt, dd") ?? [])]
+    .find((node) => /^example\s*:?$/i.test(clean(node.textContent)) || /^(?:example)\s*:/i.test(text(node)));
+  if (exampleLabel) {
+    const candidate = exampleLabel.nextElementSibling ?? exampleLabel.closest("li")?.querySelector("code, samp, .prop-value");
+    const value = text(candidate);
+    return value.replace(/^example\s*:?\s*/i, "") || null;
+  }
+  const documentedExample = (description ?? text(primitive?.querySelector(".renderedMarkdown, .markdown")))
+    .match(/\bfor example,?\s+([\w.-]+)/i)?.[1];
+  if (documentedExample) return documentedExample;
+  return null;
 }
 
 function enumData(detail) {
@@ -40,8 +51,12 @@ function enumData(detail) {
   const values = [...enumNode.querySelectorAll("li, .enum-item, code, [data-value]")]
     .map((node) => clean(node.getAttribute("data-value") ?? node.textContent)).filter(Boolean);
   if (!values.length) {
-    const raw = text(enumNode);
+    const raw = text(enumNode).replace(/^enum\s*:\s*\[\s*/i, "").replace(/\s*\]\s*$/, "");
     if (raw && !/expand|enum values?/i.test(raw)) values.push(...raw.split(/[\n,;]/).map(clean).filter(Boolean));
+  }
+  if (values.length) {
+    values[0] = values[0].replace(/^enum\s*:\s*\[\s*/i, "").trim();
+    values[values.length - 1] = values.at(-1).replace(/\s*\]\s*$/, "").trim();
   }
   const collapsed = [...(enumNode?.querySelectorAll("button.model-box-control") ?? [])].some((button) =>
     button.getAttribute("aria-expanded") === "false" || /collapsed/i.test(button.className));
@@ -52,6 +67,16 @@ function objectTableFor(row) {
   const cell = detailCell(row);
   return cell.querySelector(":scope .inner-object table.model, :scope table.model")
     ?? row.querySelector(":scope + tr .inner-object table.model, :scope + tr table.model");
+}
+
+function schemaIdentity(model) {
+  const titled = model.querySelector(":scope > caption, :scope > thead .model-title, :scope > .model-title, .model-title");
+  const raw = text(titled);
+  let name = raw.match(/#\/components\/schemas\/([^\s]+)/)?.[1]
+    ?? raw.replace(/^.*(?:Schema|Model)\s*:?\s*/i, "").trim();
+  const middle = Math.floor(name.length / 2);
+  if (name.length % 2 === 0 && name.slice(0, middle) === name.slice(middle)) name = name.slice(0, middle);
+  return { name: name.replace(/\s*\(\s*\d+\s*\)\s*$/, "").trim(), raw };
 }
 
 function childRows(table) {
@@ -73,13 +98,13 @@ function propertyDetails(row, parentPath, warnings, seenRows = new WeakSet()) {
   const type = text(typeNode) || null;
   const description = descriptionIn(detail);
   const metadata = parseMetadata(primitive);
-  const example = exampleValue(primitive, metadata);
+  const example = exampleValue(primitive, metadata, description);
   const enumeration = enumData(detail);
   if (enumeration.state === "empty-or-collapsed" && detail.querySelector(".prop-enum button.model-box-control")) enumeration.state = "partially-exposed";
   const table = objectTableFor(row);
   const children = table ? childRows(table).map((child) => propertyDetails(child, path, warnings, seenRows)).filter(Boolean) : [];
   const objectDescriptionRow = table?.querySelector(":scope > tbody > tr.description, :scope > tr.description");
-  const objectDescription = descriptionIn(objectDescriptionRow) ?? (objectDescriptionRow ? text(objectDescriptionRow) : null);
+  const objectDescription = descriptionIn(objectDescriptionRow) ?? description ?? (objectDescriptionRow ? text(objectDescriptionRow) : null);
   const isObject = Boolean(table || detail.querySelector(":scope .inner-object"));
   const kind = isObject ? "object" : enumeration.values.length ? "enum" : "property";
   return {
@@ -105,8 +130,7 @@ function propertyDetails(row, parentPath, warnings, seenRows = new WeakSet()) {
 }
 
 function modelTitle(model) {
-  return text(model.querySelector(":scope > caption, :scope > thead .model-title, :scope > .model-title, .model-title"))
-    .replace(/\s*\(\s*\d+\s*\)\s*$/, "").trim();
+  return schemaIdentity(model).name;
 }
 
 function schemaFromModel(model, warnings) {
@@ -124,8 +148,10 @@ function schemaFromModel(model, warnings) {
     duplicateNames.add(property.name);
   }
   const descriptionRow = model.querySelector(":scope > tbody > tr.description, :scope > tr.description");
+  const identity = schemaIdentity(model);
   return {
     name,
+    ...(identity.raw && identity.raw !== name ? { sourceName: identity.raw } : {}),
     description: descriptionIn(descriptionRow) ?? (descriptionRow ? text(descriptionRow) : null),
     properties,
     directPropertyCount: rows.length,
@@ -160,7 +186,7 @@ export function extractRenderedSchemas(documentRef = globalThis.document) {
   if (!documentRef?.querySelectorAll) throw new TypeError("A browser Document is required.");
   const warnings = [];
   const root = documentRef.querySelector("#swagger-ui .models, .models") ?? documentRef.querySelector("#swagger-ui") ?? documentRef;
-  const models = [...root.querySelectorAll("table.model")].filter((model) => !model.parentElement?.closest("table.model"));
+  const models = [...root.querySelectorAll("table.model")].filter((model) => !model.closest(".inner-object"));
   const schemas = models.map((model) => schemaFromModel(model, warnings)).filter(Boolean);
   const unique = new Map();
   for (const schema of schemas) {

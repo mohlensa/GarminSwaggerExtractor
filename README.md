@@ -30,7 +30,7 @@ To check a captured catalog against the supplied manual SplitSummaryDTO referenc
 npm run validate -- garmin-schema-catalog.json
 ```
 
-The validator reports per-check `PASS`, `FAIL`, or `NOT VERIFIABLE`; overall `PASS` only means the supplied catalog values match the manual references, not that the live DOM was fully extracted. It never edits or forces extraction results to match. Do not use `npm run extract` expecting a standalone browser: this command intentionally reports that a DOM must be supplied by the open page.
+The validator reports per-check `PASS`, `FAIL`, or `NOT VERIFIABLE`; it recognizes SplitSummary evidence either as a standalone `SplitSummaryDTO` model or an inline `splitSummaries` object. Overall `PASS` only means the supplied catalog values match the manual references, not that the live DOM was fully extracted. It never edits or forces extraction results to match. Do not use `npm run extract` expecting a standalone browser: this command intentionally reports that a DOM must be supplied by the open page.
 
 ## Architecture
 

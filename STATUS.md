@@ -1,4 +1,4 @@
-# Project status — remediation 1.0.1
+# Project status — remediation 1.0.2
 
 Updated: 2026-11-23
 
@@ -20,8 +20,10 @@ Updated: 2026-11-23
 - Tests cover extraction, serialization, nested inline objects, examples/descriptions, metadata, absent/malformed rows, empty objects, absent/collapsed enum states, bounded expansion and click errors, report coverage, and three-way acceptance status.
 - The 225 reference count is used only by the validator. It is not injected into extraction output.
 - Live compatibility status: **PENDING**. No Garmin DOM, account content, network response, or endpoint was accessed during this remediation.
-- Quality checks: `npm test` 11/11 pass; `npm run lint` pass; `npm run build` pass; `npm audit` zero vulnerabilities; `git diff --check` pass.
+- Follow-up fixes are based on the owner-provided live catalog JSON, not a new live DOM session: schema name was doubled, `splitSummaries` was nested, enum values were rendered as one bracketed text node, and valueKey example existed only in description text.
+- Quality checks: `npm test` 13/13 pass; `npm run lint` pass; `npm run build` pass (13.9 KB bundle); `npm audit` zero vulnerabilities; `git diff --check` pass.
+- Running the revised validator against the supplied old capture returns FAIL: 224 versus expected 225, and the captured scale enum still contains wrapper text. Description, type, and example checks pass. This is expected because fixes require a fresh browser capture.
 
 ## Remaining owner action
 
-Using an authorized browser already displaying the official Personal API Swagger UI, run the generated browser bundle with the Schemas section open. Inspect the report and catalog; verify `SplitSummaryDTO.directPropertyCount == 225`, the five known enum-bearing properties, and the `maxGradeValue` description/children/12 ordered enum values. Then run `npm run validate -- <captured-catalog.json>`. Report unexpected omissions or partial enum state before calling live acceptance PASS.
+Using an authorized browser already displaying the official Personal API Swagger UI, build/run this revision's bundle with the Schemas section open and save a new catalog. Inspect the report and catalog; verify `splitSummaries.directPropertyCount == 225`, the five known enum-bearing properties, and the `maxGradeValue` description/children/12 ordered enum values. Then run `npm run validate -- <new-catalog.json>`. Report unexpected omissions or partial enum state before calling live acceptance PASS. The prior capture remains evidence of old behavior; it should not be edited.

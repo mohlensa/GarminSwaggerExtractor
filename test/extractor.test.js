@@ -111,3 +111,22 @@ test("validator marks fields not verifiable when reference evidence is missing",
   assert.equal(result.status, "NOT VERIFIABLE");
   assert.ok(result.checks.some((check) => check.status === "NOT VERIFIABLE"));
 });
+
+test("regression: extracts screenshot-captured splitSummaries shape with wrapper enum and documented example", () => {
+  const { window } = new JSDOM(`<div class="models"><table class="model"><caption>#/components/schemas/ApplicationFormatDTOApplicationFormatDTO</caption><tbody><tr class="property-row"><td>splitSummaries</td><td><div class="property"><span class="prop-type">string</span><div class="inner-object"><table class="model"><tbody>${property("startTimeLocal", "string")}${property("maxGradeValue", "string", `<div class="renderedMarkdown">Maximum grade value and its grading scale for the split</div><div class="inner-object"><table class="model"><tbody>${property("valueKey", "string", "", "Key identifying the climbing grade within the specified scale. For example, _5_1 represents grade 5.1 on the YDS scale.")}${property("scale", "string", `<div class="prop-enum">Enum:[ YDS, UIAA, FRENCH, BRITISH_ADJECTIVAL, BRITISH_TECHNICAL, EWBANK, BRAZILIAN, SAXON, VERMIN, FONT, DANKYU, YDS_PM ]</div>`)}</tbody></table></div>`)}</tbody></table></div></td></tr></tbody></table></div>`);
+  const result = extractRenderedSchemas(window.document);
+  assert.equal(result.schemas.length, 1);
+  assert.ok(result.schemas.every(({ name }) => name === "ApplicationFormatDTO"));
+  assert.equal(result.schemas[0].name, "ApplicationFormatDTO");
+  const splitSummaries = result.schemas[0].properties[0];
+  assert.equal(splitSummaries.children.length, 2);
+  const grade = splitSummaries.children[1];
+  assert.equal(grade.objectDescription, "Maximum grade value and its grading scale for the split");
+  assert.equal(grade.children[0].example, "_5_1");
+  assert.deepEqual(grade.children[1].enum, scales);
+});
+
+test("acceptance validator locates splitSummaries nested inside a containing schema", () => {
+  const catalog = { schemas: [{ name: "ApplicationFormatDTO", properties: [{ name: "splitSummaries", kind: "object", directPropertyCount: 225, properties: [{ name: "maxGradeValue", objectDescription: "Maximum grade value and its grading scale for the split.", properties: [{ name: "valueKey", type: "string", example: "_5_1" }, { name: "scale", type: "string", enum: scales }] }] }] }] };
+  assert.equal(validateCatalog(catalog).status, "PASS");
+});

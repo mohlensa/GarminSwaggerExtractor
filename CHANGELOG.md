@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.2 — Live catalog evidence fixes (unreleased)
+
+- Recognize repeated DTO names in the rendered title and retain normalized schema identity.
+- Validate `splitSummaries` when embedded as an inline object in a containing schema.
+- Recover primitive examples when rendered in description text (without inventing values).
+- Parse bracketed `Enum:[ ... ]` text cleanly, including one-node wrapped renderings.
+- Add regression coverage for the supplied live catalog structure.
+- Live re-capture is still required; no acceptance result is claimed.
+
 ## 1.0.1 — DOM compatibility remediation (unreleased)
 
 - Target the observed Swagger table DOM: `table.model`, `tr.property-row`, plain-text first-cell names, second-cell details, nested `.inner-object` tables, and `tr.description`.
